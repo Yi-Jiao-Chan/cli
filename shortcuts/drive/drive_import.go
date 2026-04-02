@@ -229,3 +229,73 @@ func importDefaultFileName(filePath string) string {
 	}
 	return name
 }
+
+// uploadMediaForImport uploads the source file to the temporary import media
+// endpoint and returns the file token consumed by import_tasks.
+func uploadMediaForImport(ctx context.Context, runtime *common.RuntimeContext, filePath, fileName, docType string) (string, error) {
+	importInfo, err := runtime.FileIO().Stat(filePath)
+	if err != nil {
+		return "", output.ErrValidation("cannot read file: %s", err)
+	}
+	fileSize := importInfo.Size()
+	if fileSize > maxDriveUploadFileSize {
+		return "", output.ErrValidation("file %.1fMB exceeds 20MB limit", float64(fileSize)/1024/1024)
+	}
+
+	fmt.Fprintf(runtime.IO().ErrOut, "Uploading media for import: %s (%s)\n", fileName, common.FormatSize(fileSize))
+
+	f, err := runtime.FileIO().Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
+	extraMap := map[string]string{
+		"obj_type":       docType,
+		"file_extension": ext,
+	}
+	extraBytes, _ := json.Marshal(extraMap)
+
+	// Build SDK Formdata
+	fd := larkcore.NewFormdata()
+	fd.AddField("file_name", fileName)
+	fd.AddField("parent_type", "ccm_import_open")
+	fd.AddField("size", fmt.Sprintf("%d", fileSize))
+	fd.AddField("extra", string(extraBytes))
+	fd.AddFile("file", f)
+
+	apiResp, err := runtime.DoAPI(&larkcore.ApiReq{
+		HttpMethod: http.MethodPost,
+		ApiPath:    "/open-apis/drive/v1/medias/upload_all",
+		Body:       fd,
+	}, larkcore.WithFileUpload())
+	if err != nil {
+		var exitErr *output.ExitError
+		if errors.As(err, &exitErr) {
+			// Preserve already-classified CLI errors from lower layers instead of
+			// wrapping them as a generic network failure.
+			return "", err
+		}
+		return "", output.ErrNetwork("upload media failed: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(apiResp.RawBody, &result); err != nil {
+		return "", output.Errorf(output.ExitAPI, "api_error", "upload media failed: invalid response JSON: %v", err)
+	}
+
+	if larkCode := int(common.GetFloat(result, "code")); larkCode != 0 {
+		// Surface the backend error body so callers can see import-specific
+		// validation failures such as unsupported formats or permission issues.
+		msg, _ := result["msg"].(string)
+		return "", output.ErrAPI(larkCode, fmt.Sprintf("upload media failed: [%d] %s", larkCode, msg), result["error"])
+	}
+
+	data, _ := result["data"].(map[string]interface{})
+	fileToken, _ := data["file_token"].(string)
+	if fileToken == "" {
+		return "", output.Errorf(output.ExitAPI, "api_error", "upload media failed: no file_token returned")
+	}
+	return fileToken, nil
+}

@@ -13,13 +13,13 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/larksuite/cli/extension/fileio"
 	"github.com/larksuite/cli/internal/output"
 	"github.com/larksuite/cli/internal/validate"
 	"github.com/larksuite/cli/internal/vfs"
@@ -339,7 +339,7 @@ func resolveLocalMedia(ctx context.Context, runtime *common.RuntimeContext, s me
 	ft := detectIMFileType(safePath)
 	dur := ""
 	if s.withDuration {
-		dur = parseMediaDuration(safePath, ft)
+		dur = parseMediaDuration(runtime, safePath, ft)
 	}
 	return uploadFileToIM(ctx, runtime, safePath, ft, dur)
 }
@@ -556,11 +556,11 @@ func findMP4Box(data []byte, start, end int, boxType string) (int, int) {
 // for audio/video uploads. Only reads the minimal portion of the file needed
 // for parsing (tail for OGG, box headers + moov for MP4).
 // Returns "" if parsing fails or the file type is not audio/video.
-func parseMediaDuration(filePath, fileType string) string {
+func parseMediaDuration(runtime *common.RuntimeContext, filePath, fileType string) string {
 	if fileType != "opus" && fileType != "mp4" {
 		return ""
 	}
-	f, err := vfs.Open(filePath)
+	f, err := runtime.FileIO().Open(filePath)
 	if err != nil {
 		return ""
 	}
@@ -698,7 +698,7 @@ func readMp4DurationBytes(data []byte) int64 {
 }
 
 // readOggDuration reads the tail of an OGG file (up to 64 KB) and parses duration.
-func readOggDuration(f *os.File, fileSize int64) int64 {
+func readOggDuration(f fileio.File, fileSize int64) int64 {
 	const maxTail = 65536
 	readSize := fileSize
 	if readSize > maxTail {
@@ -713,7 +713,7 @@ func readOggDuration(f *os.File, fileSize int64) int64 {
 
 // readMp4Duration walks top-level MP4 boxes via file seeks to find moov,
 // then reads only the moov content to locate mvhd and extract the duration.
-func readMp4Duration(f *os.File, fileSize int64) int64 {
+func readMp4Duration(f fileio.File, fileSize int64) int64 {
 	hdr := make([]byte, 16)
 	var offset int64
 	for offset+8 <= fileSize {
@@ -1005,14 +1005,11 @@ const maxImageUploadSize = 5 * 1024 * 1024  // 5MB — Lark API limit for images
 const maxFileUploadSize = 100 * 1024 * 1024 // 100MB — Lark API limit for files
 
 func uploadImageToIM(ctx context.Context, runtime *common.RuntimeContext, filePath, imageType string) (string, error) {
-	// filePath is already validated by the caller (resolveLocalMedia).
-	safePath := filePath
-
-	if info, err := vfs.Stat(safePath); err == nil && info.Size() > maxImageUploadSize {
+	if info, err := runtime.FileIO().Stat(filePath); err == nil && info.Size() > maxImageUploadSize {
 		return "", fmt.Errorf("image size %s exceeds limit (max 5MB)", common.FormatSize(info.Size()))
 	}
 
-	f, err := vfs.Open(safePath)
+	f, err := runtime.FileIO().Open(filePath)
 	if err != nil {
 		return "", err
 	}
@@ -1045,14 +1042,11 @@ func uploadImageToIM(ctx context.Context, runtime *common.RuntimeContext, filePa
 }
 
 func uploadFileToIM(ctx context.Context, runtime *common.RuntimeContext, filePath, fileType, duration string) (string, error) {
-	// filePath is already validated by the caller (resolveLocalMedia).
-	safePath := filePath
-
-	if info, err := vfs.Stat(safePath); err == nil && info.Size() > maxFileUploadSize {
+	if info, err := runtime.FileIO().Stat(filePath); err == nil && info.Size() > maxFileUploadSize {
 		return "", fmt.Errorf("file size %s exceeds limit (max 100MB)", common.FormatSize(info.Size()))
 	}
 
-	f, err := vfs.Open(safePath)
+	f, err := runtime.FileIO().Open(filePath)
 	if err != nil {
 		return "", err
 	}
@@ -1060,7 +1054,7 @@ func uploadFileToIM(ctx context.Context, runtime *common.RuntimeContext, filePat
 
 	fd := larkcore.NewFormdata()
 	fd.AddField("file_type", fileType)
-	fd.AddField("file_name", filepath.Base(safePath))
+	fd.AddField("file_name", filepath.Base(filePath))
 	if duration != "" {
 		fd.AddField("duration", duration)
 	}

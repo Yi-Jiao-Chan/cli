@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"os"
 	"testing"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
@@ -82,6 +83,23 @@ func (a *testDefaultAcct) ResolveAccount(ctx context.Context) (*credential.Accou
 		return &credential.Account{}, nil
 	}
 	return credential.AccountFromCliConfig(a.config), nil
+}
+
+// TestChdir changes the working directory to dir for the duration of the test.
+// The original directory is restored via t.Cleanup.
+// This enables tests to use LocalFileIO (which resolves relative paths under cwd)
+// with temporary directories, keeping test artifacts out of the source tree.
+// Not compatible with t.Parallel() — os.Chdir is process-wide.
+func TestChdir(t *testing.T, dir string) {
+	t.Helper()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir(%s): %v", dir, err)
+	}
+	t.Cleanup(func() { os.Chdir(orig) })
 }
 
 type testDefaultToken struct{}

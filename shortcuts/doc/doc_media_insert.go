@@ -108,19 +108,13 @@ var DocMediaInsert = common.Shortcut{
 		alignStr := runtime.Str("align")
 		caption := runtime.Str("caption")
 
-		safeFilePath, pathErr := validate.SafeInputPath(filePath)
-		if pathErr != nil {
-			return output.ErrValidation("unsafe file path: %s", pathErr)
-		}
-		filePath = safeFilePath
-
 		documentID, err := resolveDocxDocumentID(runtime, docInput)
 		if err != nil {
 			return err
 		}
 
 		// Validate file
-		stat, err := vfs.Stat(filePath)
+		stat, err := runtime.FileIO().Stat(filePath)
 		if err != nil {
 			return output.ErrValidation("file not found: %s", filePath)
 		}
@@ -359,7 +353,7 @@ func extractCreatedBlockTargets(createData map[string]interface{}, mediaType str
 
 // uploadMediaFile uploads a file to Feishu drive as media.
 func uploadMediaFile(ctx context.Context, runtime *common.RuntimeContext, filePath, fileName, mediaType, parentNode, docId string) (string, error) {
-	f, err := vfs.Open(filePath)
+	f, err := runtime.FileIO().Open(filePath)
 	if err != nil {
 		return "", err
 	}

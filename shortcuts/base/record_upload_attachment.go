@@ -16,8 +16,7 @@ import (
 
 	"github.com/larksuite/cli/internal/output"
 	"github.com/larksuite/cli/internal/util"
-	"github.com/larksuite/cli/internal/validate"
-	"github.com/larksuite/cli/internal/vfs"
+>>>>>>> 2b941a5 (feat: migrate upload/read-file shortcuts to FileIO.Open/Stat (Phase 3))
 	"github.com/larksuite/cli/shortcuts/common"
 )
 
@@ -91,6 +90,7 @@ func dryRunRecordUploadAttachment(_ context.Context, runtime *common.RuntimeCont
 
 func executeRecordUploadAttachment(runtime *common.RuntimeContext) error {
 	filePath := runtime.Str("file")
+<<<<<<< HEAD
 	safeFilePath, err := validate.SafeInputPath(filePath)
 	if err != nil {
 		return output.ErrValidation("unsafe file path: %s", err)
@@ -98,6 +98,8 @@ func executeRecordUploadAttachment(runtime *common.RuntimeContext) error {
 	filePath = safeFilePath
 
 	fileInfo, err := vfs.Stat(filePath)
+=======
+	fileInfo, err := runtime.FileIO().Stat(filePath)
 	if err != nil {
 		return output.ErrValidation("file not found: %s", filePath)
 	}
@@ -209,7 +211,7 @@ func normalizeAttachmentForPatch(attachment map[string]interface{}) map[string]i
 }
 
 func uploadAttachmentToBase(runtime *common.RuntimeContext, filePath, fileName, baseToken string, fileSize int64) (map[string]interface{}, error) {
-	f, err := vfs.Open(filePath)
+	f, err := runtime.FileIO().Open(filePath)
 	if err != nil {
 		return nil, output.ErrValidation("cannot open file: %v", err)
 	}

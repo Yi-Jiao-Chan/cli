@@ -243,10 +243,7 @@ func TestDownloadIMResourceToPathSuccess(t *testing.T) {
 		}
 	}))
 
-	tmpDir := t.TempDir()
-	origWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(origWd)
+	cmdutil.TestChdir(t, t.TempDir())
 
 	target := filepath.Join("nested", "resource.bin")
 	_, size, err := downloadIMResourceToPath(context.Background(), runtime, "om_123", "file_123", "file", target)
@@ -256,7 +253,7 @@ func TestDownloadIMResourceToPathSuccess(t *testing.T) {
 	if size != int64(len(payload)) {
 		t.Fatalf("downloadIMResourceToPath() size = %d, want %d", size, len(payload))
 	}
-	data, err := os.ReadFile(filepath.Join(tmpDir, "nested", "resource.bin"))
+	data, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
@@ -287,7 +284,9 @@ func TestDownloadIMResourceToPathHTTPErrorBody(t *testing.T) {
 		}
 	}))
 
-	_, _, err := downloadIMResourceToPath(context.Background(), runtime, "om_403", "file_403", "file", filepath.Join(t.TempDir(), "out.bin"))
+	cmdutil.TestChdir(t, t.TempDir())
+
+	_, _, err := downloadIMResourceToPath(context.Background(), runtime, "om_403", "file_403", "file", "out.bin")
 	if err == nil || !strings.Contains(err.Error(), "HTTP 403: denied") {
 		t.Fatalf("downloadIMResourceToPath() error = %v", err)
 	}
@@ -411,7 +410,10 @@ func TestUploadImageToIMSizeLimit(t *testing.T) {
 	}
 	f.Close()
 
-	_, err = uploadImageToIM(context.Background(), nil, path, "message")
+	rt := newBotShortcutRuntime(t, shortcutRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("unexpected")
+	}))
+	_, err = uploadImageToIM(context.Background(), rt, "./"+path, "message")
 	if err == nil || !strings.Contains(err.Error(), "exceeds limit") {
 		t.Fatalf("uploadImageToIM() error = %v", err)
 	}
@@ -428,7 +430,10 @@ func TestUploadFileToIMSizeLimit(t *testing.T) {
 	}
 	f.Close()
 
-	_, err = uploadFileToIM(context.Background(), nil, path, "stream", "")
+	rt := newBotShortcutRuntime(t, shortcutRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("unexpected")
+	}))
+	_, err = uploadFileToIM(context.Background(), rt, "./"+path, "stream", "")
 	if err == nil || !strings.Contains(err.Error(), "exceeds limit") {
 		t.Fatalf("uploadFileToIM() error = %v", err)
 	}
@@ -437,6 +442,7 @@ func TestUploadFileToIMSizeLimit(t *testing.T) {
 func TestResolveMediaContentWrapsUploadError(t *testing.T) {
 	runtime := &common.RuntimeContext{
 		Factory: &cmdutil.Factory{
+			FileIO: &cmdutil.LocalFileIO{},
 			IOStreams: &cmdutil.IOStreams{
 				Out:    &bytes.Buffer{},
 				ErrOut: &bytes.Buffer{},
@@ -444,7 +450,9 @@ func TestResolveMediaContentWrapsUploadError(t *testing.T) {
 		},
 	}
 
-	missing := filepath.Join(t.TempDir(), "missing.png")
+	cmdutil.TestChdir(t, t.TempDir())
+
+	missing := "missing.png"
 	_, _, err := resolveMediaContent(context.Background(), runtime, "", missing, "", "", "", "")
 	if err == nil || !strings.Contains(err.Error(), "image upload failed") {
 		t.Fatalf("resolveMediaContent() error = %v", err)

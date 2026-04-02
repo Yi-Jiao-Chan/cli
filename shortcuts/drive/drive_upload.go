@@ -16,8 +16,7 @@ import (
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 
 	"github.com/larksuite/cli/internal/output"
-	"github.com/larksuite/cli/internal/validate"
-	"github.com/larksuite/cli/internal/vfs"
+>>>>>>> 2b941a5 (feat: migrate upload/read-file shortcuts to FileIO.Open/Stat (Phase 3))
 	"github.com/larksuite/cli/shortcuts/common"
 )
 
@@ -58,18 +57,15 @@ var DriveUpload = common.Shortcut{
 		folderToken := runtime.Str("folder-token")
 		name := runtime.Str("name")
 
-		safeFilePath, err := validate.SafeInputPath(filePath)
-		if err != nil {
-			return output.ErrValidation("unsafe file path: %s", err)
-		}
-		filePath = safeFilePath
-
 		fileName := name
 		if fileName == "" {
 			fileName = filepath.Base(filePath)
 		}
 
+<<<<<<< HEAD
 		info, err := vfs.Stat(filePath)
+=======
+		info, err := runtime.FileIO().Stat(filePath)
 		if err != nil {
 			return output.ErrValidation("cannot read file: %s", err)
 		}
@@ -98,7 +94,7 @@ var DriveUpload = common.Shortcut{
 }
 
 func uploadFileToDrive(ctx context.Context, runtime *common.RuntimeContext, filePath, fileName, folderToken string, fileSize int64) (string, error) {
-	f, err := vfs.Open(filePath)
+	f, err := runtime.FileIO().Open(filePath)
 	if err != nil {
 		return "", err
 	}

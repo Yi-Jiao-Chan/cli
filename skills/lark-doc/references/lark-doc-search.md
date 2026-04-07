@@ -32,6 +32,19 @@ lark-cli docs +search --query "评测结果"
 # 标题包含关键词（默认按关键词检索，不做精确标题匹配）
 lark-cli docs +search --query "方案"
 
+# 使用服务端标题限定语法
+lark-cli docs +search --query 'intitle:方案'
+
+# 精确短语匹配
+lark-cli docs +search --query '"季度 总结"'
+
+# 逻辑或 / 排除
+lark-cli docs +search --query '方案 OR 草稿'
+lark-cli docs +search --query '方案 -草稿'
+
+# 标题精确短语匹配
+lark-cli docs +search --query 'intitle:"季度总结"'
+
 # 按最近打开时间过滤
 lark-cli docs +search \
   --query "方案" \
@@ -102,11 +115,22 @@ lark-cli docs +search --query "方案" --format json --page-token '<PAGE_TOKEN>'
 
 | 参数 | 必填 | 说明 |
 |------|------|------|
-| `--query <text>` | 否 | 搜索关键词。默认是关键词检索，不是精确标题匹配；不传/空字符串表示空搜。**凡是有关键词，都要显式通过 `--query` 传递，不要写成位置参数。** |
+| `--query <text>` | 否 | 搜索关键词。**支持高级 Boolean 语法**以提升搜索精度：<br>1. 使用空格表示 AND（如 `方案 设计`）。<br>2. 使用 `OR` 表示逻辑或（如 `方案 OR 草稿`）。<br>3. 使用 `-` 表示排除（如 `方案 -草稿`）。<br>4. 使用双引号 `""` 表示精确匹配短语。<br>5. 使用 `intitle:` 限定关键词出现在标题中（如 `intitle:总结` 或 `intitle:"季度 总结"`）。不传/空字符串表示空搜。**凡是有关键词，都要显式通过 `--query` 传递，不要写成位置参数。** |
 | `--filter <json>` | 否 | JSON 对象。公共字段默认同时应用到 `doc_filter` / `wiki_filter`；若传 `folder_tokens`，则只发 `doc_filter`；若传 `space_ids`，则只发 `wiki_filter`；两者不能同时传 |
 | `--page-size <n>` | 否 | 每页数量（默认 15，最大 20） |
 | `--page-token <token>` | 否 | 翻页标记（配合 `has_more` 使用） |
 | `--format` | 否 | 输出格式：json（默认） \| pretty |
+
+## `--query` 高级语法
+
+以下语法由服务端搜索能力处理，适合把过滤逻辑尽量下推到搜索侧：
+
+- 空格表示 AND：`方案 设计`
+- `OR` 表示逻辑或：`方案 OR 草稿`
+- `-` 表示排除：`方案 -草稿`
+- 双引号表示精确短语：`"季度 总结"`
+- `intitle:` 表示标题限定：`intitle:总结`
+- 标题精确短语：`intitle:"季度总结"`
 
 ## `--filter` 字段速查
 
@@ -142,7 +166,7 @@ lark-cli docs +search --query "方案" --format json --page-token '<PAGE_TOKEN>'
 - `chat_ids`：适合“搜某个群里分享过的文档”“看某个群会话里的方案”。如果用户只给群名，先切到 `lark-im` 用群搜索能力拿到 `chat_id`，再回到 `docs +search`。
 - `sharer_ids`：适合“找某人分享过的文档”“看某个同事转给我的资料”。如果用户只给姓名，不要猜 ID，先用 `lark-contact` 查分享者 `open_id`。
 - `folder_tokens`：适合“在某个云空间文件夹里搜文档”。它不是知识空间 `space_id`，两者不要混用。
-- `only_title`：适合“标题里包含某个词”的场景；如果用户要“标题精确等于”，先用它缩小结果，再做客户端精确匹配。
+- `only_title`：适合“标题里包含某个词”的场景；如果用户明确表达标题限定，也可以直接在 `--query` 里使用 `intitle:`。如果用户要“标题精确等于”，优先使用 `intitle:"完整标题"`，必要时再做客户端精确确认。
 - `only_comment`：适合“评论里提到某个词”“只找评论区讨论过某件事”。它和 `only_title` 一样，都是把搜索范围缩小到特定区域，但这里限制到评论区。
 - `open_time`：适合“最近打开过 / 最近看过”的描述；如果用户说相对时间，先换算成明确绝对时间再传。
 - `sort_type`：`CREATE_TIME_ASC` 在协议里标注“暂不支持”，`ENTITY_CREATE_TIME_ASC` / `ENTITY_CREATE_TIME_DESC` 已废弃，默认不要主动使用。
@@ -171,7 +195,7 @@ lark-cli docs +search --query "方案" --format json --page-token '<PAGE_TOKEN>'
 ## 决策规则
 
 - 参数传递：只要用户给了搜索关键词，就必须显式使用 `--query "<关键词>"`。不要生成 `lark-cli docs +search 方案`、`lark-cli docs +search xxx（搜索关键词）` 这种位置参数写法。
-- 查询语义：默认按关键词搜索理解。用户说“标题为 `X`”“标题里有 `X`”“搜索 `X` 文档”时，先直接返回命中的 OpenAPI 结果；只有用户明确要求“标题精确等于 `X`”时，才做客户端二次筛选。做精确匹配前，先去掉 `title_highlighted` 里的高亮标签。
+- 查询语义：必须优先利用 --query 的高级语法（如 intitle:、""、-）将过滤逻辑下推给服务端。当用户要求“标题精确等于 X”时，直接使用 --query "intitle:\"X\""，严禁先进行模糊搜索再做客户端二次筛选。只有在遇到服务端语法无法覆盖的复杂本地比对场景时，才允许在客户端过滤，且比对前必须先去掉 title_highlighted 里的高亮标签。
 - 实体补全：如果用户要按“某个群里分享的文档”搜索，先用 `lark-im` 拿 `chat_id` 再填 `chat_ids`；如果用户要按“某人分享的文档”搜索，先用 `lark-contact` 拿 `open_id` 再填 `sharer_ids`。
 - 零结果回退：如果因为用户的显式类型约束加了 `doc_types` 且结果为 0，可以提示“按指定类型没搜到”；只有在不违背用户明确约束的前提下，才建议放宽类型重试。
 - 入口选择：用户说“找表格标题”“找名为 `X` 的电子表格”“搜某个报表”时，也默认走 `docs +search`。不要误用 `sheets +find` 做跨文件搜索。

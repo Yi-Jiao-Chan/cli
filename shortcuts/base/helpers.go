@@ -83,8 +83,19 @@ func parseStringListFlexible(fio fileio.FileIO, raw string, flagName string) ([]
 }
 
 func parseStringList(raw string) []string {
-	items, _ := parseStringListFlexible(nil, raw, "fields")
-	return items
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		item := strings.TrimSpace(part)
+		if item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
 }
 
 func deepMergeMaps(dst, src map[string]interface{}) map[string]interface{} {

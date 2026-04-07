@@ -599,7 +599,7 @@ Content-Type: text/html; charset=UTF-8
 <div>hello</div>
 `)
 	for _, bad := range []string{"my logo", "cid\there", "lo<go>id", "img(1)"} {
-		err := Apply(snapshot, Patch{
+		err := Apply(&cmdutil.LocalFileIO{}, snapshot, Patch{
 			Ops: []PatchOp{{Op: "add_inline", Path: "logo.png", CID: bad}},
 		})
 		if err == nil {
@@ -627,7 +627,7 @@ Content-Type: text/html; charset=UTF-8
 <div><img src="cid:logo" /></div>
 `)
 	// Step 1: add inline — this wraps body into multipart/related
-	err := Apply(snapshot, Patch{
+	err := Apply(&cmdutil.LocalFileIO{}, snapshot, Patch{
 		Ops: []PatchOp{{Op: "add_inline", Path: "logo.png", CID: "logo"}},
 	})
 	if err != nil {
@@ -636,7 +636,7 @@ Content-Type: text/html; charset=UTF-8
 
 	// Step 2: set_body — this restructures the MIME tree, potentially making
 	// PrimaryHTMLPartID stale
-	err = Apply(snapshot, Patch{
+	err = Apply(&cmdutil.LocalFileIO{}, snapshot, Patch{
 		Ops: []PatchOp{{Op: "set_body", Value: `<div>updated<img src="cid:logo" /></div>`}},
 	})
 	if err != nil {
@@ -644,7 +644,7 @@ Content-Type: text/html; charset=UTF-8
 	}
 
 	// Step 3: set_body again dropping the CID reference — should fail validation
-	err = Apply(snapshot, Patch{
+	err = Apply(&cmdutil.LocalFileIO{}, snapshot, Patch{
 		Ops: []PatchOp{{Op: "set_body", Value: `<div>no image here</div>`}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "orphaned cids") {
@@ -706,7 +706,7 @@ func TestReplaceInlineRejectsInvalidCharactersInCID(t *testing.T) {
 	}
 	snapshot := mustParseFixtureDraft(t, fixtureData)
 	for _, bad := range []string{"my logo", "cid\there", "lo<go>id", "img(1)"} {
-		err := Apply(snapshot, Patch{
+		err := Apply(&cmdutil.LocalFileIO{}, snapshot, Patch{
 			Ops: []PatchOp{{Op: "replace_inline", Target: AttachmentTarget{PartID: "1.2"}, Path: "updated.png", CID: bad}},
 		})
 		if err == nil {

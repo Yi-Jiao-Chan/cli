@@ -311,28 +311,14 @@ func TestUploadImageToIMSuccess(t *testing.T) {
 		}
 	}))
 
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Getwd() error = %v", err)
-	}
-	tmpDir := t.TempDir()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Chdir() error = %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(wd)
-	})
+	cmdutil.TestChdir(t, t.TempDir())
 
 	path := "demo.png"
 	if err := os.WriteFile(path, []byte("png"), 0600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		t.Fatalf("Abs() error = %v", err)
-	}
-	got, err := uploadImageToIM(context.Background(), runtime, absPath, "message")
+	got, err := uploadImageToIM(context.Background(), runtime, path, "message")
 	if err != nil {
 		t.Fatalf("uploadImageToIM() error = %v", err)
 	}
@@ -363,28 +349,14 @@ func TestUploadFileToIMSuccess(t *testing.T) {
 		}
 	}))
 
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Getwd() error = %v", err)
-	}
-	tmpDir := t.TempDir()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Chdir() error = %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(wd)
-	})
+	cmdutil.TestChdir(t, t.TempDir())
 
 	path := "demo.txt"
 	if err := os.WriteFile(path, []byte("demo"), 0600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		t.Fatalf("Abs() error = %v", err)
-	}
-	got, err := uploadFileToIM(context.Background(), runtime, absPath, "stream", "1200")
+	got, err := uploadFileToIM(context.Background(), runtime, path, "stream", "1200")
 	if err != nil {
 		t.Fatalf("uploadFileToIM() error = %v", err)
 	}
@@ -400,7 +372,8 @@ func TestUploadFileToIMSuccess(t *testing.T) {
 }
 
 func TestUploadImageToIMSizeLimit(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "too-large.png")
+	cmdutil.TestChdir(t, t.TempDir())
+	path := "too-large.png"
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -413,14 +386,15 @@ func TestUploadImageToIMSizeLimit(t *testing.T) {
 	rt := newBotShortcutRuntime(t, shortcutRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("unexpected")
 	}))
-	_, err = uploadImageToIM(context.Background(), rt, "./"+path, "message")
+	_, err = uploadImageToIM(context.Background(), rt, path, "message")
 	if err == nil || !strings.Contains(err.Error(), "exceeds limit") {
 		t.Fatalf("uploadImageToIM() error = %v", err)
 	}
 }
 
 func TestUploadFileToIMSizeLimit(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "too-large.bin")
+	cmdutil.TestChdir(t, t.TempDir())
+	path := "too-large.bin"
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -433,7 +407,7 @@ func TestUploadFileToIMSizeLimit(t *testing.T) {
 	rt := newBotShortcutRuntime(t, shortcutRoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("unexpected")
 	}))
-	_, err = uploadFileToIM(context.Background(), rt, "./"+path, "stream", "")
+	_, err = uploadFileToIM(context.Background(), rt, path, "stream", "")
 	if err == nil || !strings.Contains(err.Error(), "exceeds limit") {
 		t.Fatalf("uploadFileToIM() error = %v", err)
 	}
@@ -472,15 +446,7 @@ func TestResolveLocalMediaImage(t *testing.T) {
 		return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
 	}))
 
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Getwd() error = %v", err)
-	}
-	tmpDir := t.TempDir()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Chdir() error = %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(wd) })
+	cmdutil.TestChdir(t, t.TempDir())
 
 	if err := os.WriteFile("test.png", []byte("png-data"), 0600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -511,15 +477,7 @@ func TestResolveLocalMediaFile(t *testing.T) {
 		return nil, fmt.Errorf("unexpected request: %s", req.URL.String())
 	}))
 
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Getwd() error = %v", err)
-	}
-	tmpDir := t.TempDir()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Chdir() error = %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(wd) })
+	cmdutil.TestChdir(t, t.TempDir())
 
 	if err := os.WriteFile("test.txt", []byte("file-data"), 0600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)

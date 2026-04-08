@@ -69,7 +69,7 @@ func TestDryRunRecordOps(t *testing.T) {
 		nil,
 		map[string]int{"offset": -3, "limit": 500},
 	)
-	assertDryRunContains(t, dryRunRecordList(ctx, listRT), "GET /open-apis/base/v3/bases/app_x/tables/tbl_1/records", "offset=0", "limit=200", "view_id=viw_1")
+	assertDryRunContains(t, dryRunRecordList(ctx, listRT), "GET /open-apis/base/v3/bases/app_x/tables/tbl_1/records", "offset=0", "limit=200", "view_id=viw_1", "field_id=Name", "field_id=Age")
 
 	commaFieldRT := newBaseTestRuntimeWithArrays(
 		map[string]string{"base-token": "app_x", "table-id": "tbl_1"},
@@ -77,7 +77,7 @@ func TestDryRunRecordOps(t *testing.T) {
 		nil,
 		map[string]int{"limit": 1},
 	)
-	assertDryRunContains(t, dryRunRecordList(ctx, commaFieldRT), "limit=1", "offset=0")
+	assertDryRunContains(t, dryRunRecordList(ctx, commaFieldRT), "limit=1", "offset=0", "field_id=A%2CB", "field_id=C")
 
 	upsertCreateRT := newBaseTestRuntime(
 		map[string]string{"base-token": "app_x", "table-id": "tbl_1", "json": `{"Name":"A"}`},
@@ -91,7 +91,7 @@ func TestDryRunRecordOps(t *testing.T) {
 		nil,
 		map[string]int{"max-version": 11, "page-size": 30},
 	)
-	assertDryRunContains(t, dryRunRecordGet(ctx, rt), "GET /open-apis/base/v3/bases/app_x/tables/tbl_1/records/rec_1")
+	assertDryRunContains(t, dryRunRecordGet(ctx, rt), "GET /open-apis/base/v3/bases/app_x/tables/tbl_1/records/rec_1", "field=Name", "field=Age")
 	assertDryRunContains(t, dryRunRecordUpsert(ctx, rt), "PATCH /open-apis/base/v3/bases/app_x/tables/tbl_1/records/rec_1")
 	assertDryRunContains(t, dryRunRecordDelete(ctx, rt), "DELETE /open-apis/base/v3/bases/app_x/tables/tbl_1/records/rec_1")
 	assertDryRunContains(t, dryRunRecordHistoryList(ctx, rt), "GET /open-apis/base/v3/bases/app_x/record_history", "max_version=11", "page_size=30", "record_id=rec_1", "table_id=tbl_1")

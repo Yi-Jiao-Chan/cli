@@ -33,8 +33,8 @@ lark-cli base +record-list \
   --base-token app_xxx \
   --table-id tbl_xxx \
   --view-id viw_xxx \
-  --field fld_status \
-  --field 项目名称 \
+  --field-id fld_status \
+  --field-id 项目名称 \
   --offset 0 \
   --limit 50
 ```
@@ -46,7 +46,7 @@ lark-cli base +record-list \
 | `--base-token <token>` | 是 | Base Token |
 | `--table-id <id_or_name>` | 是 | 表 ID 或表名 |
 | `--view-id <id>` | 否 | 视图 ID；传入后只读该视图结果 |
-| `--field <id_or_name>` | 否 | 字段 ID 或字段名；可重复传入多个 `--field` 裁剪返回列 |
+| `--field-id <id_or_name>` | 否 | 字段 ID 或字段名；可重复传入多个 `--field-id` 裁剪返回列 |
 | `--offset <n>` | 否 | 分页偏移，默认 `0` |
 | `--limit <n>` | 否 | 分页大小，默认 `100`，范围 `1-200`（最大 `200`，超过会报错） |
 
@@ -58,7 +58,7 @@ lark-cli base +record-list \
 GET /open-apis/base/v3/bases/:base_token/tables/:table_id/records
 ```
 
-- 查询参数会附带 `view_id / field(repeatable) / offset / limit`。
+- 查询参数会附带 `view_id / field_id(repeatable) / offset / limit`。
 
 
 ## 坑点
@@ -66,7 +66,7 @@ GET /open-apis/base/v3/bases/:base_token/tables/:table_id/records
 - ⚠️ `+record-list` 禁止并发调用；批量拉多个视图或多张表时必须串行。
 - ⚠️ `--limit` 最大 `200`，不要传超过 `200` 的值。
 - ⚠️ 分页时优先根据返回的 `has_more` 判断是否继续请求，不要盲目预拉全量数据。
-- ⚠️ `--field` 接受字段 ID 或字段名。
+- ⚠️ `--field-id` 接受字段 ID 或字段名。
 - ⚠️ 复杂筛选优先落到视图里，再用 `--view-id` 读取。
 
 ## 参考

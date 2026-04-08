@@ -5,6 +5,8 @@ package base
 
 import (
 	"context"
+	"net/url"
+	"strconv"
 
 	"github.com/larksuite/cli/shortcuts/common"
 )
@@ -15,28 +17,33 @@ func dryRunRecordList(_ context.Context, runtime *common.RuntimeContext) *common
 		offset = 0
 	}
 	limit := common.ParseIntBounded(runtime, "limit", 1, 200)
-	params := map[string]interface{}{"offset": offset, "limit": limit}
-	if fields := recordFields(runtime); len(fields) > 0 {
-		params["field_id"] = fields
+	params := url.Values{}
+	params.Set("offset", strconv.Itoa(offset))
+	params.Set("limit", strconv.Itoa(limit))
+	for _, field := range recordFields(runtime) {
+		params.Add("field_id", field)
 	}
 	if viewID := runtime.Str("view-id"); viewID != "" {
-		params["view_id"] = viewID
+		params.Set("view_id", viewID)
 	}
+	path := "/open-apis/base/v3/bases/:base_token/tables/:table_id/records?" + params.Encode()
 	return common.NewDryRunAPI().
-		GET("/open-apis/base/v3/bases/:base_token/tables/:table_id/records").
-		Params(params).
+		GET(path).
 		Set("base_token", runtime.Str("base-token")).
 		Set("table_id", baseTableID(runtime))
 }
 
 func dryRunRecordGet(_ context.Context, runtime *common.RuntimeContext) *common.DryRunAPI {
-	params := map[string]interface{}{}
+	path := "/open-apis/base/v3/bases/:base_token/tables/:table_id/records/:record_id"
 	if fields := recordFields(runtime); len(fields) > 0 {
-		params["field"] = fields
+		params := url.Values{}
+		for _, field := range fields {
+			params.Add("field", field)
+		}
+		path += "?" + params.Encode()
 	}
 	return common.NewDryRunAPI().
-		GET("/open-apis/base/v3/bases/:base_token/tables/:table_id/records/:record_id").
-		Params(params).
+		GET(path).
 		Set("base_token", runtime.Str("base-token")).
 		Set("table_id", baseTableID(runtime)).
 		Set("record_id", runtime.Str("record-id"))

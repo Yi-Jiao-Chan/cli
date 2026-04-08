@@ -31,6 +31,7 @@ var SheetExport = common.Shortcut{
 		{Name: "file-extension", Desc: "export format: xlsx | csv", Required: true},
 		{Name: "output-path", Desc: "local save path"},
 		{Name: "sheet-id", Desc: "sheet ID (required for CSV)"},
+		{Name: "overwrite", Type: "bool", Desc: "overwrite existing output file"},
 	},
 	Validate: func(ctx context.Context, runtime *common.RuntimeContext) error {
 		token := runtime.Str("spreadsheet-token")
@@ -61,11 +62,18 @@ var SheetExport = common.Shortcut{
 		fileExt := runtime.Str("file-extension")
 		outputPath := runtime.Str("output-path")
 		sheetIdFlag := runtime.Str("sheet-id")
+		overwrite := runtime.Bool("overwrite")
 
 		// Early path validation before any API call
+		var safePath string
 		if outputPath != "" {
-			if _, err := validate.SafeOutputPath(outputPath); err != nil {
+			var err error
+			safePath, err = validate.SafeOutputPath(outputPath)
+			if err != nil {
 				return output.ErrValidation("unsafe output path: %s", err)
+			}
+			if err := common.EnsureWritableFile(safePath, overwrite); err != nil {
+				return err
 			}
 		}
 
@@ -117,6 +125,7 @@ var SheetExport = common.Shortcut{
 				"file_token": fileToken,
 				"ticket":     ticket,
 			}, nil)
+			return nil
 		}
 
 		// Download
@@ -129,10 +138,6 @@ var SheetExport = common.Shortcut{
 		}
 		defer resp.Body.Close()
 
-		safePath, pathErr := validate.SafeOutputPath(outputPath)
-		if pathErr != nil {
-			return output.ErrValidation("unsafe output path: %s", pathErr)
-		}
 		if err := vfs.MkdirAll(filepath.Dir(safePath), 0700); err != nil {
 			return output.Errorf(output.ExitInternal, "api_error", "cannot create parent directory: %s", err)
 		}

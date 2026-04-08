@@ -104,7 +104,7 @@ metadata:
 1. **只使用原子命令** — 使用 `+table-list / +table-get / +field-create / +record-upsert / +view-set-filter / +record-history-list / +base-get` 这类一命令一动作的写法，不使用旧聚合式 `+table / +field / +record / +view / +history / +workspace`
 2. **写记录前先读字段结构** — 先调用 `+field-list` 获取字段结构，再读 [lark-base-shortcut-record-value.md](references/lark-base-shortcut-record-value.md) 确认各字段类型的写入值格式
 3. **写字段前先看字段属性规范** — 先读 [lark-base-shortcut-field-properties.md](references/lark-base-shortcut-field-properties.md) 确认 `+field-create/+field-update` 的 JSON 结构
-4. **筛选查询按场景执行** — 先读 [lark-base-view-set-filter.md](references/lark-base-view-set-filter.md)、[lark-base-record-list.md](references/lark-base-record-list.md)、[lark-base-record-search.md](references/lark-base-record-search.md)；视图筛选读取用 `+view-set-filter` + `+record-list`，关键词检索用 `+record-search`
+4. **筛选查询按场景执行** — 先读 [lark-base-view-set-filter.md](references/lark-base-view-set-filter.md)、[lark-base-record-list.md](references/lark-base-record-list.md)、[lark-base-record-search.md](references/lark-base-record-search.md)；默认优先 `+record-list`，仅当用户提供明确搜索关键词时使用 `+record-search`；视图筛选读取用 `+view-set-filter` + `+record-list`
 5. **对记录进行分析（涉及"最高/最低/总计/平均/排名/比较/数量"等分析意图）** — 先读 [lark-base-data-query.md](references/lark-base-data-query.md)，通过 `+data-query` 进行数据筛选聚合的服务端计算
 6. **聚合分析与取数互斥** — 需要分组统计 / SUM / MAX / AVG / COUNT 时，必须使用 `+data-query`（服务端计算），禁止用 `+record-list / +record-search` 拉全量记录再手动计算；反之，`+data-query` 不返回原始记录，取数场景走 `+record-search / +record-list / +record-get`
 7. **所有 `+xxx-list` 禁止并发调用** — `+table-list / +field-list / +record-list / +view-list / +record-history-list / +role-list` 只能串行执行
@@ -157,6 +157,7 @@ metadata:
 - **Base token 口径统一**：统一使用 `--base-token`
 - **`+xxx-list` 调用纪律**：`+table-list / +field-list / +record-list / +view-list / +record-history-list / +role-list / +dashboard-list / +dashboard-block-list / +workflow-list` 禁止并发调用；批量执行时只能串行
 - **`+record-list` 分页规则**：`--limit` 最大 `200`。先拉首批并检查返回 `has_more`；仅当 `has_more=true` 且用户明确需要更多数据（如“全部导出/全量明细/继续下一页”）时再继续翻页。用户只要样例或前 N 条时，不要继续拉全量
+- **`+record-list / +record-search` 选择规则**：优先使用 `+record-list`；仅当用户给出明确搜索关键词时，才使用 `+record-search`
 - **`+record-search` 使用规则**：仅通过 `--json` 传搜索请求体；`keyword/search_fields/offset/limit` 等字段合法性由 API 侧按 schema 校验
 - **字段可写性先判断**：存储字段才可写；公式 / lookup / 系统字段默认只读，写记录时应跳过
 - **公式能力要主动想到**：用户说“算一下”“生成标签”“判断是否异常”“跨表汇总”“按日期差预警”时，要先判断是否应该建公式字段，而不是只返回手工分析方案

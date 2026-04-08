@@ -7,6 +7,7 @@
 ## 适用场景
 
 - 需要关键词检索记录。
+- 用户已提供明确搜索关键词（`keyword`）。
 - 需要附带 `view_id / select_fields` 控制检索范围与返回字段。
 - 不用于聚合统计。涉及 SUM/AVG/COUNT/MAX/MIN 时改用 `+data-query`。
 

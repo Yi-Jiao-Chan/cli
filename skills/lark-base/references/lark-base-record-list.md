@@ -4,7 +4,7 @@
 
 分页列出一张表里的记录；可按视图过滤。
 
-> 如果需求是关键词检索，优先使用 [lark-base-record-search.md](lark-base-record-search.md)。
+> 默认优先使用 `+record-list`；仅当用户提供明确搜索关键词时，才使用 [lark-base-record-search.md](lark-base-record-search.md)。
 
 ## 返回关键字段
 

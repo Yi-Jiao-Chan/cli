@@ -1,7 +1,7 @@
 ---
 name: lark-slides
 version: 1.0.0
-description: "飞书幻灯片AI：以XML格式创建和管理PPT。创建空白演示文稿、读取PPT全文信息、创建和删除幻灯片页面。当用户需要以XML格式创建PPT、读取PPT内容、管理幻灯片页面时使用。"
+description: "飞书幻灯片：以XML格式创建和管理PPT。创建空白演示文稿、读取PPT全文信息、创建和删除幻灯片页面。当用户需要创建PPT、读取PPT内容、管理幻灯片页面时使用。"
 metadata:
   requires:
     bins: ["lark-cli"]
@@ -29,6 +29,72 @@ metadata:
 3. [examples.md](references/examples.md) — CLI 调用示例
 4. [slides_demo.xml](references/slides_demo.xml) — 真实 XML 示例
 5. [slides_xml_schema_definition.xml](references/slides_xml_schema_definition.xml) — 完整 Schema
+
+## 核心概念
+
+### URL 格式与 Token
+
+| URL 格式 | 示例 | Token 类型 | 处理方式 |
+|----------|------|-----------|----------|
+| `/slides/` | `https://example.larkoffice.com/slides/xxxxxxxxxxxxx` | `xml_presentation_id` | URL 路径中的 token 直接作为 `xml_presentation_id` 使用 |
+| `/wiki/` | `https://example.larkoffice.com/wiki/wikcnxxxxxxxxx` | `wiki_token` | ⚠️ **不能直接使用**，需要先查询获取真实的 `obj_token` |
+
+### Wiki 链接特殊处理（关键！）
+
+知识库链接（`/wiki/TOKEN`）背后可能是云文档、电子表格、幻灯片等不同类型的文档。**不能直接假设 URL 中的 token 就是 `xml_presentation_id`**，必须先查询实际类型和真实 token。
+
+#### 处理流程
+
+1. **使用 `wiki.spaces.get_node` 查询节点信息**
+   ```bash
+   lark-cli wiki spaces get_node --params '{"token":"wiki_token"}'
+   ```
+
+2. **从返回结果中提取关键信息**
+   - `node.obj_type`：文档类型，幻灯片对应 `slides`
+   - `node.obj_token`：**真实的演示文稿 token**（用于后续操作）
+   - `node.title`：文档标题
+
+3. **确认 `obj_type` 为 `slides` 后，使用 `obj_token` 作为 `xml_presentation_id`**
+
+#### 查询示例
+
+```bash
+# 查询 wiki 节点
+lark-cli wiki spaces get_node --params '{"token":"OFG3w29CWiB0xNkVvhEcC2ynnAg"}'
+```
+
+返回结果示例：
+```json
+{
+   "node": {
+      "obj_type": "slides",
+      "obj_token": "CaABs8G8Kl5UoDd9y7xcwjz9ndd",
+      "title": "2026 产品年度总结",
+      "node_type": "origin",
+      "space_id": "7028488849126932483"
+   }
+}
+```
+
+```bash
+# 用 obj_token 读取幻灯片内容
+lark-cli slides xml_presentations get --params '{"xml_presentation_id":"CaABs8G8Kl5UoDd9y7xcwjz9ndd"}'
+```
+
+### 资源关系
+
+```
+Wiki Space (知识空间)
+└── Wiki Node (知识库节点, obj_type: slides)
+    └── obj_token → xml_presentation_id
+
+Slides (演示文稿)
+├── xml_presentation_id (演示文稿唯一标识)
+├── revision_id (版本号)
+└── Slide (幻灯片页面)
+    └── slide_id (页面唯一标识)
+```
 
 ## API Resources
 

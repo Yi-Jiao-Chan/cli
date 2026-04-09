@@ -32,17 +32,17 @@
 
 ```bash
 lark-cli base +record-list \
-  --base-token app_xxx \
-  --table-id tbl_xxx \
+  --base-token XXXXXX \
+  --table-id tblXXX \
   --offset 0 \
   --limit 100
 
 lark-cli base +record-list \
-  --base-token app_xxx \
-  --table-id tbl_xxx \
-  --view-id viw_xxx \
-  --field-id fld_status \
-  --field-id 项目名称 \
+  --base-token XXXXXX \
+  --table-id tblXXX \
+  --view-id vewXXX \
+  --field-id fldStatusXXX \
+  --field-id 字段名示例 \
   --offset 0 \
   --limit 50
 ```

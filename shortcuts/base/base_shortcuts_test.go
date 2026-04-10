@@ -271,7 +271,6 @@ func TestBaseRecordValidate(t *testing.T) {
 		t.Fatalf("record batch update validate should be nil")
 	}
 }
-
 func TestBaseViewValidate(t *testing.T) {
 	ctx := context.Background()
 	if err := BaseViewCreate.Validate(ctx, newBaseTestRuntime(map[string]string{"base-token": "b", "table-id": "tbl_1", "json": `{"name":"Main"}`}, nil, nil)); err != nil {

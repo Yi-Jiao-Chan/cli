@@ -32,15 +32,23 @@ var MailSend = common.Shortcut{
 		{Name: "attach", Desc: "Attachment file path(s), comma-separated (relative path only)"},
 		{Name: "inline", Desc: "Inline images as a JSON array. Each entry: {\"cid\":\"<unique-id>\",\"file_path\":\"<relative-path>\"}. All file_path values must be relative paths. Cannot be used with --plain-text. CID images are embedded via <img src=\"cid:...\"> in the HTML body. CID is a unique identifier, e.g. a random hex string like \"a1b2c3d4e5f6a7b8c9d0\"."},
 		{Name: "confirm-send", Type: "bool", Desc: "Send the email immediately instead of saving as draft. Only use after the user has explicitly confirmed recipients and content."},
+		{Name: "send-time", Desc: "Schedule the email to be sent at a specific Unix timestamp (in seconds). Cannot be used with --send-after. Must be at least 5 minutes in the future."},
+		{Name: "send-after", Desc: "Schedule the email to be sent after a relative duration (e.g. 30m, 2h). Cannot be used with --send-time. Must result in a time at least 5 minutes in the future."},
 	},
 	DryRun: func(ctx context.Context, runtime *common.RuntimeContext) *common.DryRunAPI {
 		to := runtime.Str("to")
 		subject := runtime.Str("subject")
 		confirmSend := runtime.Bool("confirm-send")
+		sendTimeStr := runtime.Str("send-time")
+		sendAfterStr := runtime.Str("send-after")
 		mailboxID := resolveComposeMailboxID(runtime)
 		desc := "Compose email → save as draft"
 		if confirmSend {
 			desc = "Compose email → save as draft → send draft"
+		}
+		scheduled := sendTimeStr != "" || sendAfterStr != ""
+		if confirmSend && scheduled {
+			desc = "Compose email → save as draft → send draft (scheduled)"
 		}
 		api := common.NewDryRunAPI().
 			Desc(desc).
@@ -54,7 +62,12 @@ var MailSend = common.Shortcut{
 				},
 			})
 		if confirmSend {
-			api = api.POST(mailboxPath(mailboxID, "drafts", "<draft_id>", "send"))
+			sendBody := map[string]interface{}{}
+			if scheduled {
+				sendBody["send_time"] = "<resolved-timestamp>"
+			}
+			api = api.POST(mailboxPath(mailboxID, "drafts", "<draft_id>", "send")).
+				Body(sendBody)
 		}
 		return api
 	},
@@ -62,7 +75,18 @@ var MailSend = common.Shortcut{
 		if err := validateComposeHasAtLeastOneRecipient(runtime.Str("to"), runtime.Str("cc"), runtime.Str("bcc")); err != nil {
 			return err
 		}
-		return validateComposeInlineAndAttachments(runtime.FileIO(), runtime.Str("attach"), runtime.Str("inline"), runtime.Bool("plain-text"), runtime.Str("body"))
+		if err := validateComposeInlineAndAttachments(runtime.FileIO(), runtime.Str("attach"), runtime.Str("inline"), runtime.Bool("plain-text"), runtime.Str("body")); err != nil {
+			return err
+		}
+		// Validate scheduling if provided
+		sendTime, err := resolveScheduledSendTime(runtime)
+		if err != nil {
+			return err
+		}
+		if sendTime > 0 && !runtime.Bool("confirm-send") {
+			return fmt.Errorf("--send-time and --send-after require --confirm-send to be set")
+		}
+		return nil
 	},
 	Execute: func(ctx context.Context, runtime *common.RuntimeContext) error {
 		to := runtime.Str("to")
@@ -145,7 +169,20 @@ var MailSend = common.Shortcut{
 			hintSendDraft(runtime, mailboxID, draftID)
 			return nil
 		}
-		resData, err := draftpkg.Send(runtime, mailboxID, draftID)
+		// Resolve scheduled send time if provided
+		sendTime, err := resolveScheduledSendTime(runtime)
+		if err != nil {
+			return err
+		}
+		var resData map[string]interface{}
+		if sendTime > 0 {
+			// Pass send_time in the body for scheduled sending
+			resData, err = runtime.CallAPI("POST", mailboxPath(mailboxID, "drafts", draftID, "send"), nil, map[string]interface{}{
+				"send_time": fmt.Sprintf("%d", sendTime),
+			})
+		} else {
+			resData, err = draftpkg.Send(runtime, mailboxID, draftID)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to send email (draft %s created but not sent): %w", draftID, err)
 		}

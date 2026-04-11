@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/larksuite/cli/extension/fileio"
 	"github.com/larksuite/cli/internal/auth"
@@ -2015,4 +2016,91 @@ func validateComposeInlineAndAttachments(fio fileio.FileIO, attachFlag, inlineFl
 	}
 	allFiles := append(splitByComma(attachFlag), inlineSpecFilePaths(inlineSpecs)...)
 	return checkAttachmentSizeLimit(fio, allFiles, 0)
+}
+
+// minScheduledDelay is the minimum time between now and a scheduled send time (5 minutes).
+const minScheduledDelay = 5 * 60 // seconds
+
+// resolveScheduledSendTime resolves --send-time and --send-after flags to a unix timestamp.
+// If both flags are set, --send-time takes precedence and a warning is logged.
+// Returns 0 if neither flag is set.
+func resolveScheduledSendTime(rt *common.RuntimeContext) (int64, error) {
+	sendTimeStr := rt.Str("send-time")
+	sendAfterStr := rt.Str("send-after")
+
+	hasSendTime := sendTimeStr != ""
+	hasSendAfter := sendAfterStr != ""
+
+	if hasSendTime && hasSendAfter {
+		fmt.Fprintf(rt.IO().ErrOut, "warning: both --send-time and --send-after are set; using --send-time\n")
+	}
+
+	if hasSendTime {
+		ts, err := strconv.ParseInt(sendTimeStr, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("--send-time must be a unix timestamp in seconds: %w", err)
+		}
+		if err := validateMinDelay(ts); err != nil {
+			return 0, err
+		}
+		return ts, nil
+	}
+
+	if hasSendAfter {
+		d, err := parseDuration(sendAfterStr)
+		if err != nil {
+			return 0, fmt.Errorf("--send-after must be a duration (e.g. 30m, 2h): %w", err)
+		}
+		ts := time.Now().Unix() + int64(d.Seconds())
+		if err := validateMinDelay(ts); err != nil {
+			return 0, err
+		}
+		return ts, nil
+	}
+
+	return 0, nil
+}
+
+// validateMinDelay ensures the scheduled timestamp is at least 5 minutes in the future.
+func validateMinDelay(ts int64) error {
+	minTs := time.Now().Unix() + minScheduledDelay
+	if ts < minTs {
+		return fmt.Errorf("--send-time must be at least 5 minutes in the future (minimum: %d seconds from now)", minScheduledDelay)
+	}
+	return nil
+}
+
+// parseDuration parses a duration string like "30m", "2h", "1d" into time.Duration.
+func parseDuration(s string) (time.Duration, error) {
+	// Try standard time.ParseDuration first
+	d, err := time.ParseDuration(s)
+	if err == nil {
+		return d, nil
+	}
+	// Handle compact formats like "30m", "2h", "1d" where unit is appended directly
+	// time.ParseDuration supports "10s", "5m", "2h" etc but not bare numbers with unit without space
+	// Re-parse with different approach for formats like "30m" without space
+	if len(s) >= 2 {
+		lastChar := s[len(s)-1]
+		numPart := s[:len(s)-1]
+		var unit time.Duration
+		switch lastChar {
+		case 's':
+			unit = time.Second
+		case 'm':
+			unit = time.Minute
+		case 'h':
+			unit = time.Hour
+		case 'd':
+			unit = 24 * time.Hour
+		default:
+			return 0, fmt.Errorf("invalid duration format: %s", s)
+		}
+		num, err := strconv.ParseInt(numPart, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid duration number: %s", numPart)
+		}
+		return time.Duration(num) * unit, nil
+	}
+	return 0, fmt.Errorf("invalid duration format: %s", s)
 }

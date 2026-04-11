@@ -131,6 +131,20 @@ lark-cli mail user_mailbox.messages send_status --params '{"user_mailbox_id":"me
 
 返回每个收件人的投递状态（`status`）：1=正在投递, 2=投递失败重试, 3=退信, 4=投递成功, 5=待审批, 6=审批拒绝。向用户简要报告结果，如有异常状态（退信/审批拒绝）需重点提示。
 
+### 定时发送
+
+支持通过 `--send-time`（Unix 时间戳）或 `--send-after`（相对时长，如 `30m`、`2h`）设置邮件的发送时间。定时发送必须与 `--confirm-send` 同时使用，且发送时间必须至少在当前时间的 5 分钟后。
+
+定时发送的邮件会保存在 `SCHEDULED` 文件夹中，可以随时取消。
+
+**取消定时发送：**
+```bash
+lark-cli mail +cancel-scheduled-send --message-id <message_id>
+```
+
+**相关 API：**
+- `mail.user_mailbox.draft.cancel_scheduled_send` — 取消定时发送
+
 ### 正文格式：优先使用 HTML
 
 撰写邮件正文时，**默认使用 HTML 格式**（body 内容会被自动检测）。仅当用户明确要求纯文本时，才使用 `--plain-text` 标志强制纯文本模式。

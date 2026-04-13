@@ -6,7 +6,7 @@ const path = require("path");
 const { execSync } = require("child_process");
 const os = require("os");
 
-const VERSION = require("../package.json").version;
+const VERSION = require("../package.json").version.replace(/-.*$/, "");
 const REPO = "larksuite/cli";
 const NAME = "lark-cli";
 
@@ -83,6 +83,16 @@ function install() {
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+}
+
+// When triggered as a postinstall hook under npx, skip the binary download.
+// The "install" wizard doesn't need it, and run.js calls install.js directly
+// (with LARK_CLI_RUN=1) for other commands that do need the binary.
+const isNpxPostinstall =
+  process.env.npm_command === "exec" && !process.env.LARK_CLI_RUN;
+
+if (isNpxPostinstall) {
+  process.exit(0);
 }
 
 try {

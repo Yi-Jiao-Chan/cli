@@ -16,8 +16,9 @@ const (
 )
 
 // parseAndValidateSendTime parses and validates the --send-time flag value.
-// Returns the RFC 3339 string to pass to the API, or an error if invalid.
-// If sendTimeStr is empty, returns ("", nil) indicating immediate send.
+// Returns a Unix timestamp string (seconds since epoch) to pass to the API,
+// or an error if invalid. If sendTimeStr is empty, returns ("", nil) indicating
+// immediate send.
 func parseAndValidateSendTime(sendTimeStr string) (string, error) {
 	if sendTimeStr == "" {
 		return "", nil
@@ -41,7 +42,7 @@ func parseAndValidateSendTime(sendTimeStr string) (string, error) {
 		)
 	}
 
-	return t.Format(time.RFC3339), nil
+	return fmt.Sprintf("%d", t.Unix()), nil
 }
 
 // formatScheduledTimeHuman returns a human-readable scheduled time string

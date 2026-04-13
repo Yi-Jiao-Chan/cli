@@ -5,6 +5,8 @@ package mail
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -23,13 +25,23 @@ func TestParseAndValidateSendTime_Empty(t *testing.T) {
 }
 
 func TestParseAndValidateSendTime_ValidRFC3339(t *testing.T) {
-	future := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+	futureTime := time.Now().Add(1 * time.Hour)
+	future := futureTime.Format(time.RFC3339)
 	result, err := parseAndValidateSendTime(future)
 	if err != nil {
 		t.Fatalf("expected no error for valid RFC 3339 time, got: %v", err)
 	}
 	if result == "" {
 		t.Fatal("expected non-empty result for valid RFC 3339 time")
+	}
+	// Result should be a Unix timestamp string
+	ts, parseErr := strconv.ParseInt(result, 10, 64)
+	if parseErr != nil {
+		t.Fatalf("expected Unix timestamp string, got %q: %v", result, parseErr)
+	}
+	expected := futureTime.Unix()
+	if ts != expected {
+		t.Fatalf("expected Unix timestamp %d, got %d", expected, ts)
 	}
 }
 
@@ -45,6 +57,11 @@ func TestParseAndValidateSendTime_ValidWithTimezone(t *testing.T) {
 	if result == "" {
 		t.Fatal("expected non-empty result")
 	}
+	// Result should be a Unix timestamp string
+	expected := fmt.Sprintf("%d", future.Unix())
+	if result != expected {
+		t.Fatalf("expected Unix timestamp %s, got %s", expected, result)
+	}
 }
 
 func TestParseAndValidateSendTime_WithoutTimezoneDefaultsToUTC(t *testing.T) {
@@ -58,9 +75,14 @@ func TestParseAndValidateSendTime_WithoutTimezoneDefaultsToUTC(t *testing.T) {
 	if result == "" {
 		t.Fatal("expected non-empty result")
 	}
-	// The result should be valid RFC 3339
-	if _, parseErr := time.Parse(time.RFC3339, result); parseErr != nil {
-		t.Fatalf("result %q is not valid RFC 3339: %v", result, parseErr)
+	// The result should be a Unix timestamp string
+	ts, parseErr := strconv.ParseInt(result, 10, 64)
+	if parseErr != nil {
+		t.Fatalf("expected Unix timestamp string, got %q: %v", result, parseErr)
+	}
+	expected := future.Unix()
+	if ts != expected {
+		t.Fatalf("expected Unix timestamp %d, got %d", expected, ts)
 	}
 }
 

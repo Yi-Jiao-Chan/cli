@@ -43,6 +43,9 @@ func parseJSONObject(pc *parseCtx, raw string, flagName string) (map[string]inte
 		}
 		return nil, common.FlagErrorf("--%s must be a JSON object; %s", flagName, jsonInputTip(flagName))
 	}
+	if result == nil {
+		return nil, common.FlagErrorf("--%s must be a JSON object; %s", flagName, jsonInputTip(flagName))
+	}
 	return result, nil
 }
 

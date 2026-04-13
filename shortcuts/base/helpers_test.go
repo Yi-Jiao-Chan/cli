@@ -41,6 +41,9 @@ func TestParseHelpers(t *testing.T) {
 	if _, err := parseJSONObject(testPC, `[1]`, "json"); err == nil || !strings.Contains(err.Error(), "--json must be a JSON object") || !strings.Contains(err.Error(), "lark-base skill") || strings.Contains(err.Error(), "array") {
 		t.Fatalf("err=%v", err)
 	}
+	if _, err := parseJSONObject(testPC, `null`, "json"); err == nil || !strings.Contains(err.Error(), "--json must be a JSON object") {
+		t.Fatalf("err=%v", err)
+	}
 	obj, err = parseJSONObject(testPC, "@"+tmp.Name(), "json")
 	if err != nil || obj["name"] != "from-file" {
 		t.Fatalf("file obj=%v err=%v", obj, err)

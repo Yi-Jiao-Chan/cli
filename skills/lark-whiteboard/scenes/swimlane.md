@@ -138,11 +138,11 @@
                   "children": [{ "type": "rect", "id": "d-s2", "width": 200, "height": "fit-content", "fillColor": "#EAE6F3", "borderColor": "#8569CB", "borderWidth": 2, "borderRadius": 8 }] }
               ] }
           ]
-        }
+        },
+        { "type": "connector", "connector": { "from": "c-s1", "to": "d-s2",
+          "lineShape": "polyline", "lineColor": "#BBBFC4", "lineWidth": 2, "endArrow": "arrow" } }
       ]
-    },
-    { "type": "connector", "connector": { "from": "c-s1", "to": "d-s2",
-      "lineShape": "polyline", "lineColor": "#BBBFC4", "lineWidth": 2, "endArrow": "arrow" } }
+    }
   ]
 }
 ```

@@ -1,6 +1,6 @@
 # whiteboard +update（更新画板）
 
-> **前置条件：** 先阅读 [`../lark-shared/SKILL.md`](../../lark-shared/SKILL.md) 了解认证、全局参数和安全规则。
+> **前置条件：** 先阅读 [`../../lark-shared/SKILL.md`](../../lark-shared/SKILL.md) 了解认证、全局参数和安全规则。
 
 更新画板内容，支持三种输入格式：
 
@@ -26,8 +26,8 @@
 
 思维导图，时序图，类图，饼图，流程图等图标推荐使用 Mermaid/PlantUML 语法绘制。
 
-而当需要绘制架构图，组织架构图，泳道图，对比图，鱼骨图，柱状图，折线图，树状图，漏斗图，金字塔图，循环/飞轮图，里程碑或其他较为复杂的图表时，推荐参考 [lark-whiteboard-cli](../lark-whiteboard-cli/SKILL.md)
-使用 whiteboard-cli 工具创作。
+而当需要绘制架构图，组织架构图，泳道图，对比图，鱼骨图，柱状图，折线图，树状图，漏斗图，金字塔图，循环/飞轮图，里程碑或其他较为复杂的图表时，
+**MUST** 使用 whiteboard-cli 工具，根据[workflow.md](../workflow.md)中的工作流创作。
 
 ## 示例
 
@@ -71,8 +71,7 @@ lark-cli whiteboard +update \
 
 ### 示例 3：使用 whiteboard-cli 直接使用画板 DSL 更新画板
 
-whiteboard-cli 工具的具体用法请参考 [../lark-whiteboard-cli/SKILL.md](../lark-whiteboard-cli/SKILL.md)
-
+参考 [workflow.md](../workflow.md) 以了解完整的画板绘制工作流程。
 ```bash
 # 使用 whiteboard-cli 生成 OpenAPI 格式并通过管道传递
 npx -y @larksuite/whiteboard-cli@^0.1.0 --to openapi -i <画板 DSL> --format json | lark-cli whiteboard +update \
@@ -83,8 +82,7 @@ npx -y @larksuite/whiteboard-cli@^0.1.0 --to openapi -i <画板 DSL> --format js
 
 ### 示例 4：使用 whiteboard-cli 使用画板 DSL 生成 Raw 格式 Json，并使用其更新画板
 
-whiteboard-cli 工具的具体用法请参考 [../lark-whiteboard-cli/SKILL.md](../lark-whiteboard-cli/SKILL.md)
-
+参考 [workflow.md](../workflow.md) 以了解完整的画板绘制工作流程。
 ```bash
 # 使用 whiteboard-cli 生成 OpenAPI 格式并通过管道传递
 npx -y @larksuite/whiteboard-cli@^0.1.0 --to openapi -i <画板 DSL> -o ./temp.json

@@ -222,6 +222,7 @@ type plantumlCreateResp struct {
 
 func parseWBcliNodes(rawjson []byte) (wbNodes interface{}, err error, isRaw bool) {
 	var wbOutput WbCliOutput
+	fmt.Println(string(rawjson))
 	if err := json.Unmarshal(rawjson, &wbOutput); err != nil {
 		return nil, output.Errorf(output.ExitValidation, "parsing", fmt.Sprintf("unmarshal input json failed: %v", err)), false
 	}

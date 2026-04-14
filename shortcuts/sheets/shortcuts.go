@@ -36,5 +36,9 @@ func Shortcuts() []common.Shortcut {
 		SheetListFilterViewConditions,
 		SheetGetFilterViewCondition,
 		SheetDeleteFilterViewCondition,
+		SheetSetDropdown,
+		SheetUpdateDropdown,
+		SheetGetDropdown,
+		SheetDeleteDropdown,
 	}
 }

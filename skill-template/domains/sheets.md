@@ -157,7 +157,9 @@ lark-cli sheets +write --url "URL" --sheet-id "sheetId" --range "C6" \
   --values '[["=SUM(C2:C5)"]]'
 ```
 
+> **公式语法参考**：涉及 ARRAYFORMULA、原生数组函数、MAP/LAMBDA、日期差、Excel 公式改写等飞书特有规则时，先阅读 [`references/lark-sheets-formula.md`](references/lark-sheets-formula.md)。
+
 **限制**：
-- 公式不支持跨表引用（IMPORTRANGE）
+- 公式支持 IMPORTRANGE 跨表引用（最多 5 层嵌套、每个工作表最多 100 个引用）
 - @人仅支持同租户用户，单次最多 50 人
-- 下拉列表需先调用设置下拉列表接口，值中的字符串不能包含逗号
+- 下拉列表需**先通过 `+set-dropdown` 配置下拉选项**，否则 `multipleValue` 写入会变成纯文本。值中的字符串不能包含逗号

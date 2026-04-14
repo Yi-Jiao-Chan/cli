@@ -33,21 +33,29 @@ var MailReplyAll = common.Shortcut{
 		{Name: "attach", Desc: "Attachment file path(s), comma-separated (relative path only)"},
 		{Name: "inline", Desc: "Inline images as a JSON array. Each entry: {\"cid\":\"<unique-id>\",\"file_path\":\"<relative-path>\"}. All file_path values must be relative paths. Cannot be used with --plain-text. CID images are embedded via <img src=\"cid:...\"> in the HTML body. CID is a unique identifier, e.g. a random hex string like \"a1b2c3d4e5f6a7b8c9d0\"."},
 		{Name: "confirm-send", Type: "bool", Desc: "Send the reply immediately instead of saving as draft. Only use after the user has explicitly confirmed recipients and content."},
+		{Name: "send-time", Desc: "Schedule the reply to be sent at a future time (RFC 3339 format, e.g. 2026-04-14T09:00:00+08:00). Requires --confirm-send to actually schedule."},
 	},
 	DryRun: func(ctx context.Context, runtime *common.RuntimeContext) *common.DryRunAPI {
 		messageId := runtime.Str("message-id")
 		confirmSend := runtime.Bool("confirm-send")
+		sendTimeStr := runtime.Str("send-time")
 		mailboxID := resolveComposeMailboxID(runtime)
 		desc := "Reply-all: fetch original message (with recipients) → resolve sender address → save as draft"
-		if confirmSend {
+		if confirmSend && sendTimeStr != "" {
+			desc = "Reply-all (--confirm-send --send-time): fetch original message → resolve sender address → create draft → schedule send"
+		} else if confirmSend {
 			desc = "Reply-all (--confirm-send): fetch original message (with recipients) → resolve sender address → create draft → send draft"
+		}
+		body := map[string]interface{}{"raw": "<base64url-EML>"}
+		if sendTimeStr != "" {
+			body["send_time"] = sendTimeStr
 		}
 		api := common.NewDryRunAPI().
 			Desc(desc).
 			GET(mailboxPath(mailboxID, "messages", messageId)).
 			GET(mailboxPath(mailboxID, "profile")).
 			POST(mailboxPath(mailboxID, "drafts")).
-			Body(map[string]interface{}{"raw": "<base64url-EML>"})
+			Body(body)
 		if confirmSend {
 			api = api.POST(mailboxPath(mailboxID, "drafts", "<draft_id>", "send"))
 		}
@@ -56,6 +64,11 @@ var MailReplyAll = common.Shortcut{
 	Validate: func(ctx context.Context, runtime *common.RuntimeContext) error {
 		if err := validateConfirmSendScope(runtime); err != nil {
 			return err
+		}
+		if sendTimeStr := runtime.Str("send-time"); sendTimeStr != "" {
+			if _, err := parseAndValidateSendTime(sendTimeStr); err != nil {
+				return err
+			}
 		}
 		return validateComposeInlineAndAttachments(runtime.FileIO(), runtime.Str("attach"), runtime.Str("inline"), runtime.Bool("plain-text"), "")
 	},
@@ -70,6 +83,7 @@ var MailReplyAll = common.Shortcut{
 		attachFlag := runtime.Str("attach")
 		inlineFlag := runtime.Str("inline")
 		confirmSend := runtime.Bool("confirm-send")
+		sendTimeStr := runtime.Str("send-time")
 
 		inlineSpecs, err := parseInlineSpecs(inlineFlag)
 		if err != nil {
@@ -188,21 +202,44 @@ var MailReplyAll = common.Shortcut{
 			return fmt.Errorf("failed to create draft: %w", err)
 		}
 		if !confirmSend {
-			runtime.Out(map[string]interface{}{
+			outData := map[string]interface{}{
 				"draft_id": draftID,
 				"tip":      fmt.Sprintf(`draft saved. To send: lark-cli mail user_mailbox.drafts send --params '{"user_mailbox_id":"%s","draft_id":"%s"}'`, mailboxID, draftID),
-			}, nil)
+			}
+			if sendTimeStr != "" {
+				outData["tip"] = fmt.Sprintf(
+					`draft saved. To schedule send, add --confirm-send: lark-cli mail +reply-all --send-time %q --confirm-send`, sendTimeStr)
+			}
+			runtime.Out(outData, nil)
 			hintSendDraft(runtime, mailboxID, draftID)
 			return nil
 		}
-		resData, err := draftpkg.Send(runtime, mailboxID, draftID)
+		var resData map[string]interface{}
+		if sendTimeStr != "" {
+			validatedTime, parseErr := parseAndValidateSendTime(sendTimeStr)
+			if parseErr != nil {
+				return parseErr
+			}
+			sendBody := map[string]interface{}{"send_time": validatedTime}
+			resData, err = draftpkg.SendWithBody(runtime, mailboxID, draftID, sendBody)
+		} else {
+			resData, err = draftpkg.Send(runtime, mailboxID, draftID)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to send reply-all (draft %s created but not sent): %w", draftID, err)
 		}
-		runtime.Out(map[string]interface{}{
+		outData := map[string]interface{}{
 			"message_id": resData["message_id"],
 			"thread_id":  resData["thread_id"],
-		}, nil)
+		}
+		if sendTimeStr != "" {
+			outData["status"] = "scheduled"
+			outData["send_time"] = sendTimeStr
+			if msgID, ok := resData["message_id"].(string); ok && msgID != "" {
+				outData["tip"] = fmt.Sprintf("To cancel: lark-cli mail +cancel-scheduled-send --message-id %s", msgID)
+			}
+		}
+		runtime.Out(outData, nil)
 		hintMarkAsRead(runtime, mailboxID, messageId)
 		return nil
 	},

@@ -43,6 +43,7 @@ var MailReplyAll = common.Shortcut{
 		{Name: "subject", Desc: "Optional. Override the auto-generated Re: subject. When set, the shortcut uses this value verbatim instead of prefixing the original subject."},
 		{Name: "template-id", Desc: "Optional. Apply a saved template by ID (decimal integer string) before composing. The template's body/to/cc/bcc/attachments are appended to the reply-derived values (no de-duplication; see warning in Execute output)."},
 		signatureFlag,
+		noSignatureFlag,
 		priorityFlag,
 		eventSummaryFlag, eventStartFlag, eventEndFlag, eventLocationFlag,
 		showLintDetailsFlag},
@@ -94,7 +95,7 @@ var MailReplyAll = common.Shortcut{
 		if err := validateSendTime(runtime); err != nil {
 			return err
 		}
-		if err := validateSignatureWithPlainText(runtime.Bool("plain-text"), runtime.Str("signature-id")); err != nil {
+		if err := validateSignatureFlags(runtime.Bool("no-signature"), runtime.Str("signature-id")); err != nil {
 			return err
 		}
 		if err := validateEventFlags(runtime); err != nil {
@@ -133,6 +134,13 @@ var MailReplyAll = common.Shortcut{
 
 		signatureID := runtime.Str("signature-id")
 		mailboxID := resolveComposeMailboxID(runtime)
+		// Signature decision (priority: --no-signature > --signature-id > default).
+		// Reply-all uses the reply default signature (reply_signature_id). senderEmail
+		// uses the same --from value resolveSignature receives: set (alias) → exact
+		// usage match; empty → fall back to the mailbox's primary usage.
+		if !runtime.Bool("no-signature") && signatureID == "" {
+			signatureID = resolveDefaultSignatureID(runtime, mailboxID, runtime.Str("from"), sigKindReply)
+		}
 		sigResult, sigErr := resolveSignature(ctx, runtime, mailboxID, signatureID, runtime.Str("from"))
 		if sigErr != nil {
 			return sigErr
@@ -316,7 +324,9 @@ var MailReplyAll = common.Shortcut{
 				return err
 			}
 		} else {
-			composedTextBody = bodyStr + quoted
+			// Append the plain-text signature between the reply body and the
+			// quoted original, mirroring the HTML path (bodyWithSig + quoted).
+			composedTextBody = appendPlainTextSignature(bodyStr, sigResult) + quoted
 			bld = bld.TextBody([]byte(composedTextBody))
 		}
 		// Embed template SMALL non-inline attachments regardless of body mode.

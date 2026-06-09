@@ -174,8 +174,8 @@ func TestDownloadSignatureImageSuccessUsesFilenameContentType(t *testing.T) {
 	}
 }
 
-func TestValidateSignatureWithPlainTextTypedError(t *testing.T) {
-	err := validateSignatureWithPlainText(true, "sig_123")
+func TestValidateSignatureFlagsTypedError(t *testing.T) {
+	err := validateSignatureFlags(true, "sig_123")
 	var validationErr *errs.ValidationError
 	if !errors.As(err, &validationErr) {
 		t.Fatalf("expected validation error, got %T (%v)", err, err)
@@ -183,8 +183,110 @@ func TestValidateSignatureWithPlainTextTypedError(t *testing.T) {
 	if len(validationErr.Params) != 2 {
 		t.Fatalf("params = %#v, want two conflicting params", validationErr.Params)
 	}
-	if validationErr.Params[0].Name != "--plain-text" || validationErr.Params[1].Name != "--signature-id" {
+	if validationErr.Params[0].Name != "--no-signature" || validationErr.Params[1].Name != "--signature-id" {
 		t.Fatalf("unexpected params: %#v", validationErr.Params)
+	}
+}
+
+func TestValidateSignatureFlagsAllowsCompatibleCombinations(t *testing.T) {
+	// Plain text + signature is now allowed (the signature is downgraded to
+	// plain text). --no-signature alone and --signature-id alone are fine.
+	cases := []struct {
+		noSignature bool
+		signatureID string
+	}{
+		{false, ""},
+		{false, "sig_123"},
+		{true, ""},
+	}
+	for _, c := range cases {
+		if err := validateSignatureFlags(c.noSignature, c.signatureID); err != nil {
+			t.Fatalf("validateSignatureFlags(%v, %q) = %v, want nil", c.noSignature, c.signatureID, err)
+		}
+	}
+}
+
+func TestNormalizeSigID(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"  ", ""},
+		{"0", ""},
+		{" 0 ", ""},
+		{"123", "123"},
+		{" 456 ", "456"},
+	}
+	for _, c := range cases {
+		if got := normalizeSigID(c.in); got != c.want {
+			t.Fatalf("normalizeSigID(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestSignatureToPlainText(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "br and div boundaries become newlines",
+			in:   "Best,<br/><div>Alice</div><div>ACME Corp</div>",
+			want: "Best,\nAlice\nACME Corp",
+		},
+		{
+			name: "img is dropped not placeholdered",
+			in:   `<div>Alice <img src="cid:logo" alt="logo"/></div>`,
+			want: "Alice",
+		},
+		{
+			name: "entities decoded",
+			in:   "Tom &amp; Jerry &lt;legal&gt;",
+			want: "Tom & Jerry <legal>",
+		},
+		{
+			name: "table rows become newlines",
+			in:   "<table><tr><td>Name</td></tr><tr><td>Title</td></tr></table>",
+			want: "Name\nTitle",
+		},
+		{
+			name: "consecutive boundaries collapse to a single newline",
+			in:   "Line1<br><br><br><br>Line2",
+			want: "Line1\nLine2",
+		},
+		{
+			name: "empty after strip",
+			in:   `<img src="cid:x"/>`,
+			want: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := signatureToPlainText(c.in); got != c.want {
+				t.Fatalf("signatureToPlainText(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+func TestAppendPlainTextSignature(t *testing.T) {
+	// nil signature leaves the body untouched.
+	if got := appendPlainTextSignature("hello", nil); got != "hello" {
+		t.Fatalf("appendPlainTextSignature with nil sig = %q, want %q", got, "hello")
+	}
+	// A signature that downgrades to empty leaves the body untouched.
+	emptySig := &signatureResult{RenderedContent: `<img src="cid:x"/>`}
+	if got := appendPlainTextSignature("hello", emptySig); got != "hello" {
+		t.Fatalf("appendPlainTextSignature with empty-downgrade sig = %q, want %q", got, "hello")
+	}
+	// A real signature is appended after a blank-line separator, with the
+	// body's trailing newlines collapsed into the separator.
+	sig := &signatureResult{RenderedContent: "Best,<br/><div>Alice</div>"}
+	got := appendPlainTextSignature("hello\n\n", sig)
+	want := "hello\n\nBest,\nAlice"
+	if got != want {
+		t.Fatalf("appendPlainTextSignature = %q, want %q", got, want)
 	}
 }
 

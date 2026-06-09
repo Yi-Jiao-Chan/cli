@@ -5,10 +5,13 @@ package mail
 
 import (
 	"context"
+	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -22,7 +25,70 @@ import (
 // signatureFlag is the common flag definition for --signature-id, shared by all compose shortcuts.
 var signatureFlag = common.Flag{
 	Name: "signature-id",
-	Desc: "Optional. Signature ID to append after body content. Run `mail +signature` to list available signatures.",
+	Desc: "Optional. Signature ID to append after body content. Overrides the mailbox's default send/reply signature, which is appended automatically when omitted. Run `mail +signature` to list available signatures.",
+}
+
+// noSignatureFlag is the common flag definition for --no-signature, shared by
+// all compose shortcuts. When set, no signature is appended — neither an
+// explicit --signature-id nor the mailbox's auto-resolved default signature.
+var noSignatureFlag = common.Flag{
+	Name: "no-signature",
+	Type: "bool",
+	Desc: "Do not append any signature, including the account's default send/reply signature.",
+}
+
+// signatureKind selects which default signature to resolve for an address:
+// the send-mail default or the reply default.
+type signatureKind int
+
+const (
+	sigKindSend  signatureKind = iota // send / draft-create / forward
+	sigKindReply                      // reply / reply-all
+)
+
+// resolveDefaultSignatureID returns the default signature ID for the sender
+// address, or "" when there is no default. It is non-fatal by design: on any
+// lookup error it returns "" so the caller silently degrades to "no signature"
+// rather than failing the send (the user did not explicitly request a
+// signature). senderEmail should be the resolved sender address (alias-aware);
+// pass "" to fall back to the primary address' default.
+func resolveDefaultSignatureID(runtime *common.RuntimeContext, mailboxID, senderEmail string, kind signatureKind) string {
+	resp, err := signature.ListAll(runtime, mailboxID) // shares the per-mailbox processCache with resolveSignature
+	if err != nil || resp == nil {
+		// Non-fatal: an auto-resolution failure must not block the send.
+		fmt.Fprintf(runtime.IO().ErrOut, "warning: could not resolve default signature: %v\n", err)
+		return ""
+	}
+	pick := func(u signature.SignatureUsage) string {
+		if kind == sigKindReply {
+			return u.ReplySignatureID
+		}
+		return u.SendMailSignatureID
+	}
+	// 1) Exact match on the sender address (case-insensitive), to honour
+	//    alias / send_as scenarios.
+	if senderEmail != "" {
+		for _, u := range resp.Usages {
+			if strings.EqualFold(u.EmailAddress, senderEmail) {
+				return normalizeSigID(pick(u))
+			}
+		}
+	}
+	// 2) Fall back to the first usage (primary address default).
+	if len(resp.Usages) > 0 {
+		return normalizeSigID(pick(resp.Usages[0]))
+	}
+	return ""
+}
+
+// normalizeSigID treats "0" and blank as "no default", mirroring the
+// is_send_default / is_reply_default normalisation in mail_signature.go.
+func normalizeSigID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" || id == "0" {
+		return ""
+	}
+	return id
 }
 
 // signatureResult holds the pre-processed signature data ready for HTML injection.
@@ -244,14 +310,80 @@ func signatureCIDs(sig *signatureResult) []string {
 	return cids
 }
 
-// validateSignatureWithPlainText returns an error if both --plain-text and --signature-id are set.
-func validateSignatureWithPlainText(plainText bool, signatureID string) error {
-	if plainText && signatureID != "" {
-		return mailValidationError("--plain-text and --signature-id are mutually exclusive: signatures require HTML mode").
+// validateSignatureFlags returns an error if both --no-signature and
+// --signature-id are set: opting out of all signatures while also naming an
+// explicit one is contradictory. Plain-text mode with a signature is allowed —
+// the signature is downgraded to plain text and appended (see
+// appendPlainTextSignature).
+func validateSignatureFlags(noSignature bool, signatureID string) error {
+	if noSignature && signatureID != "" {
+		return mailValidationError("--no-signature and --signature-id are mutually exclusive").
 			WithParams(
-				mailInvalidParam("--plain-text", "mutually exclusive with --signature-id"),
-				mailInvalidParam("--signature-id", "requires HTML mode"),
+				mailInvalidParam("--no-signature", "mutually exclusive with --signature-id"),
+				mailInvalidParam("--signature-id", "mutually exclusive with --no-signature"),
 			)
 	}
 	return nil
+}
+
+// htmlBoundaryTagRe matches the block / line-break tags whose boundaries map to
+// a newline when downgrading signature HTML to plain text.
+var htmlBoundaryTagRe = regexp.MustCompile(`(?i)</?(?:br|div|p|tr)(?:\s[^>]*)?/?>`)
+
+// htmlImgTagRe matches <img ...> tags, which are dropped entirely in plain text
+// (plain-text mail carries no inline images).
+var htmlImgTagRe = regexp.MustCompile(`(?i)<img(?:\s[^>]*)?/?>`)
+
+// htmlAnyTagRe matches any remaining tag, removed without a substitute.
+var htmlAnyTagRe = regexp.MustCompile(`<[^>]*>`)
+
+// excessNewlinesRe collapses runs of 2+ newlines into a single newline.
+// Block / line-break boundaries each map to one newline, so adjacent boundary
+// tags (e.g. <br/><div>) would otherwise leave blank lines; signatures render
+// as a tidy single-newline-separated block.
+var excessNewlinesRe = regexp.MustCompile(`\n{2,}`)
+
+// signatureToPlainText downgrades interpolated signature HTML to plain text:
+//   - <br> / <div> / <p> / <tr> boundaries become newlines
+//   - <img> is dropped (plain-text mail has no inline images)
+//   - all other tags are stripped
+//   - basic HTML entities are decoded
+//   - runs of blank lines are collapsed
+func signatureToPlainText(renderedHTML string) string {
+	s := renderedHTML
+	// Drop images first so their boundary attributes don't leak as text.
+	s = htmlImgTagRe.ReplaceAllString(s, "")
+	// Map block / line-break boundaries to newlines.
+	s = htmlBoundaryTagRe.ReplaceAllString(s, "\n")
+	// Strip every remaining tag.
+	s = htmlAnyTagRe.ReplaceAllString(s, "")
+	// Decode basic HTML entities (&amp; &lt; &gt; &quot; &#34; &nbsp; ...).
+	s = html.UnescapeString(s)
+	// Normalise newlines and trim trailing whitespace per line.
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		lines[i] = strings.TrimRight(ln, " \t")
+	}
+	s = strings.Join(lines, "\n")
+	// Collapse runs of blank lines so the signature is a tidy single-newline
+	// separated block, then trim the edges.
+	s = excessNewlinesRe.ReplaceAllString(s, "\n")
+	return strings.TrimSpace(s)
+}
+
+// appendPlainTextSignature appends a plain-text rendition of the signature to
+// the plain-text body, separated by a blank line. Returns textBody unchanged
+// when there is no signature or the downgraded signature is empty.
+func appendPlainTextSignature(textBody string, sig *signatureResult) string {
+	if sig == nil {
+		return textBody
+	}
+	txt := signatureToPlainText(sig.RenderedContent)
+	if strings.TrimSpace(txt) == "" {
+		return textBody
+	}
+	const sep = "\n\n" // align with the client's plain-text signature spacing (one blank line)
+	return strings.TrimRight(textBody, "\n") + sep + txt
 }

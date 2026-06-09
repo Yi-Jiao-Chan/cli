@@ -45,6 +45,7 @@ var MailForward = common.Shortcut{
 		{Name: "subject", Desc: "Optional. Override the auto-generated Fw: subject. When set, the shortcut uses this value verbatim instead of prefixing the original subject."},
 		{Name: "template-id", Desc: "Optional. Apply a saved template by ID (decimal integer string) before composing. The template's body/to/cc/bcc/attachments are merged into the forward draft (template values appended to user flags / forward-derived values; no de-duplication)."},
 		signatureFlag,
+		noSignatureFlag,
 		priorityFlag,
 		eventSummaryFlag, eventStartFlag, eventEndFlag, eventLocationFlag,
 		showLintDetailsFlag},
@@ -96,7 +97,7 @@ var MailForward = common.Shortcut{
 				return err
 			}
 		}
-		if err := validateSignatureWithPlainText(runtime.Bool("plain-text"), runtime.Str("signature-id")); err != nil {
+		if err := validateSignatureFlags(runtime.Bool("no-signature"), runtime.Str("signature-id")); err != nil {
 			return err
 		}
 		if err := validateEventFlags(runtime); err != nil {
@@ -129,6 +130,13 @@ var MailForward = common.Shortcut{
 
 		signatureID := runtime.Str("signature-id")
 		mailboxID := resolveComposeMailboxID(runtime)
+		// Signature decision (priority: --no-signature > --signature-id > default).
+		// Forward uses the send default signature (send_mail_signature_id). senderEmail
+		// uses the same --from value resolveSignature receives: set (alias) → exact
+		// usage match; empty → fall back to the mailbox's primary usage.
+		if !runtime.Bool("no-signature") && signatureID == "" {
+			signatureID = resolveDefaultSignatureID(runtime, mailboxID, runtime.Str("from"), sigKindSend)
+		}
 		sigResult, sigErr := resolveSignature(ctx, runtime, mailboxID, signatureID, runtime.Str("from"))
 		if sigErr != nil {
 			return sigErr
@@ -310,7 +318,10 @@ var MailForward = common.Shortcut{
 				return err
 			}
 		} else {
-			composedTextBody = buildForwardedMessage(&orig, body)
+			// Append the plain-text signature to the intro body, before the
+			// forwarded original block — mirroring the HTML path, where the
+			// signature sits between the user body and the forward quote.
+			composedTextBody = buildForwardedMessage(&orig, appendPlainTextSignature(body, sigResult))
 			bld = bld.TextBody([]byte(composedTextBody))
 		}
 		// Embed template SMALL non-inline attachments regardless of body mode.
